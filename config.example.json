@@ -1,0 +1,16 @@
+{
+  "provider": "anthropic",
+  "anthropic": {
+    "api_key": "",
+    "model": "claude-sonnet-5",
+    "computer_tool_version": "computer_20251124"
+  },
+  "openai_compatible": {
+    "api_key": "",
+    "base_url": "https://api.openai.com/v1",
+    "model": "gpt-4o"
+  },
+  "agent": {
+    "max_steps": 30
+  }
+}

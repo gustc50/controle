@@ -49,6 +49,12 @@ pip install -r requirements.txt
 
 ## Uso
 
+**Windows:** dê duplo clique em `iniciar.bat` — na primeira vez ele cria o
+ambiente virtual e instala as dependências automaticamente; nas próximas
+apenas abre o programa.
+
+**Linux/macOS:**
+
 ```bash
 python main.py
 ```
@@ -81,6 +87,7 @@ python main.py
 
 ```
 main.py                        ponto de entrada
+iniciar.bat                    atalho para iniciar no Windows
 config.example.json            modelo de configuração
 src/
   config.py                    carregar/salvar config.json

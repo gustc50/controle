@@ -27,8 +27,8 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Controle de Tela por IA")
-        self.geometry("760x640")
-        self.minsize(620, 520)
+        self.geometry("800x700")
+        self.minsize(620, 480)
 
         self.controller = AgentController()
         self.config_data = config_module.load_config()
@@ -180,18 +180,62 @@ class ControlTab(ttk.Frame):
 
 
 class SettingsTab(ttk.Frame):
+    """Aba de configurações.
+
+    O conteúdo fica dentro de um Canvas rolável: assim, mesmo em janelas
+    pequenas ou com fonte/DPI maior, o botão "Salvar configurações" no final
+    nunca fica cortado/inacessível — o usuário só precisa rolar para vê-lo.
+    """
+
     def __init__(self, parent, app: App):
-        super().__init__(parent, padding=10)
+        super().__init__(parent, padding=0)
         self.app = app
         cfg = app.config_data
 
+        canvas = tk.Canvas(self, borderwidth=0, highlightthickness=0)
+        vscroll = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vscroll.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        vscroll.pack(side="right", fill="y")
+
+        inner = ttk.Frame(canvas, padding=10)
+        inner_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+
+        def _sync_scrollregion(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _sync_inner_width(event):
+            canvas.itemconfigure(inner_id, width=event.width)
+
+        inner.bind("<Configure>", _sync_scrollregion)
+        canvas.bind("<Configure>", _sync_inner_width)
+
+        def _on_mousewheel(event):
+            # Só rola se o ponteiro estiver sobre esta aba (evita "roubar" o
+            # scroll de outros widgets/abas, já que o bind é global).
+            if not str(event.widget).startswith(str(self)):
+                return
+            if event.num == 4:
+                canvas.yview_scroll(-1, "units")
+            elif event.num == 5:
+                canvas.yview_scroll(1, "units")
+            else:
+                canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)  # Windows/macOS
+        canvas.bind_all("<Button-4>", _on_mousewheel)  # Linux (scroll para cima)
+        canvas.bind_all("<Button-5>", _on_mousewheel)  # Linux (scroll para baixo)
+
+        self._build_form(inner, cfg)
+
+    def _build_form(self, container, cfg):
         ttk.Label(
-            self,
+            container,
             text="Escolha e configure o provedor de LLM externo (via API ou local):",
         ).pack(anchor="w", pady=(0, 8))
 
         self.provider_var = tk.StringVar(value=cfg.get("provider", "anthropic"))
-        provider_row = ttk.Frame(self)
+        provider_row = ttk.Frame(container)
         provider_row.pack(fill="x", pady=(0, 12))
         ttk.Radiobutton(
             provider_row,
@@ -207,7 +251,7 @@ class SettingsTab(ttk.Frame):
         ).pack(anchor="w")
 
         # --- Anthropic ---
-        a_frame = ttk.LabelFrame(self, text="Anthropic (Claude)")
+        a_frame = ttk.LabelFrame(container, text="Anthropic (Claude)")
         a_frame.pack(fill="x", pady=(0, 12))
         a_cfg = cfg["anthropic"]
 
@@ -227,7 +271,7 @@ class SettingsTab(ttk.Frame):
         ).grid(row=3, column=0, columnspan=2, sticky="w", padx=6, pady=(4, 8))
 
         # --- OpenAI-compatible / local ---
-        o_frame = ttk.LabelFrame(self, text="Compatível com OpenAI / servidor local")
+        o_frame = ttk.LabelFrame(container, text="Compatível com OpenAI / servidor local")
         o_frame.pack(fill="x", pady=(0, 12))
         o_cfg = cfg["openai_compatible"]
 
@@ -252,7 +296,7 @@ class SettingsTab(ttk.Frame):
         ).grid(row=3, column=0, columnspan=2, sticky="w", padx=6, pady=(4, 8))
 
         # --- Agent settings ---
-        agent_frame = ttk.LabelFrame(self, text="Comportamento do agente")
+        agent_frame = ttk.LabelFrame(container, text="Comportamento do agente")
         agent_frame.pack(fill="x", pady=(0, 12))
         ttk.Label(agent_frame, text="Máximo de passos por tarefa:").grid(
             row=0, column=0, sticky="w", padx=6, pady=6
@@ -262,7 +306,13 @@ class SettingsTab(ttk.Frame):
             agent_frame, from_=1, to=200, textvariable=self.max_steps_var, width=8
         ).grid(row=0, column=1, sticky="w", padx=6, pady=6)
 
-        ttk.Button(self, text="Salvar configurações", command=self._save).pack(anchor="e", pady=(4, 0))
+        save_row = ttk.Frame(container)
+        save_row.pack(fill="x", pady=(4, 0))
+        self.save_status_var = tk.StringVar(value="")
+        ttk.Label(save_row, textvariable=self.save_status_var, foreground="#2a7a2a").pack(
+            side="left"
+        )
+        ttk.Button(save_row, text="Salvar configurações", command=self._save).pack(side="right")
 
     def _labeled_entry(self, parent, label, var, row):
         parent.columnconfigure(1, weight=1)
@@ -304,7 +354,16 @@ class SettingsTab(ttk.Frame):
         cfg = self._collect_config()
         config_module.save_config(cfg)
         self.app.config_data = cfg
-        messagebox.showinfo("Configurações", "Configurações salvas com sucesso.")
+
+        provider = cfg["provider"]
+        model = cfg[provider].get("model", "")
+        provider_label = "Anthropic" if provider == "anthropic" else "Compatível com OpenAI"
+        self.save_status_var.set(f"✓ Salvo — provedor ativo: {provider_label} (modelo: {model})")
+
+        messagebox.showinfo(
+            "Configurações",
+            f"Configurações salvas com sucesso.\n\nProvedor ativo: {provider_label}\nModelo: {model}",
+        )
 
     def _test_anthropic(self):
         api_key = self.anthropic_key_var.get().strip()

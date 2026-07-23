@@ -42,6 +42,10 @@ class AgentController:
             self.log_queue.put(DONE_SENTINEL)
             return False
 
+        provider_name = cfg.get("provider", "anthropic")
+        model = cfg.get(provider_name, {}).get("model", "?")
+        self.log_queue.put(f"Provedor ativo: {provider_name} (modelo: {model})")
+
         self._stop_event.clear()
         callbacks = AgentCallbacks(
             on_log=self.log_queue.put,
